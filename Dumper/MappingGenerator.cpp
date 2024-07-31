@@ -3,6 +3,8 @@
 #include "Settings.h"
 #include "ExternalDependencies/Compression/zstd.h"
 
+#include "ExternalDependencies/Compression/brotli/c/include/brotli/encode.h"
+
 #include "Utils.h"
 
 #include <iostream>
@@ -393,13 +395,13 @@ void MappingGenerator::GenerateFileHeader(StreamType& InUsmap, const std::string
 
 	const uint32 UncompressedSize = static_cast<uint32>(Data.str().length());
 
-	constexpr auto CompressionMethod = Settings::MappingGenerator::CompressionMethod;
+	auto CompressionMethod = Settings::MappingGenerator::CompressionMethod;
 
 	/* Write 'CompressionMethod' to the compression byte */
 	WriteToStream(InUsmap, static_cast<uint8>(CompressionMethod));
 
 	size_t CompressedSize = UncompressedSize;
-	void* CompressedBuffer = nullptr;
+	void* CompressedBuffer;
 
 	switch (CompressionMethod)
 	{
@@ -408,7 +410,13 @@ void MappingGenerator::GenerateFileHeader(StreamType& InUsmap, const std::string
 		CompressedBuffer = malloc(CompressedSize);
 		CompressedSize = ZSTD_compress(CompressedBuffer, CompressedSize, Data.str().data(), UncompressedSize, ZSTD_maxCLevel());
 		break;
+	case EUsmapCompressionMethod::Brotli:
+		CompressedBuffer = malloc(CompressedSize);
+		BrotliEncoderCompress(BROTLI_MAX_QUALITY, BROTLI_MAX_WINDOW_BITS, BROTLI_MODE_GENERIC,
+			UncompressedSize, reinterpret_cast<const uint8_t*>(Data.str().data()), &CompressedSize, static_cast<uint8_t*>(CompressedBuffer));
+		break;
 	default:
+		CompressionMethod = EUsmapCompressionMethod::None;
 		CompressedBuffer = malloc(CompressedSize);
 		memcpy(CompressedBuffer, Data.str().data(), CompressedSize);
 		break;
@@ -428,6 +436,8 @@ void MappingGenerator::GenerateFileHeader(StreamType& InUsmap, const std::string
 
 	/* Header is done, now write the payload to the file */
 	InUsmap.write(static_cast<const char*>(CompressedBuffer), static_cast<uint32>(CompressedSize));
+
+	free(CompressedBuffer);
 }
 
 void MappingGenerator::Generate()

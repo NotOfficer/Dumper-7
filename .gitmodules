@@ -1,0 +1,3 @@
+[submodule "Dumper/ExternalDependencies/Compression/brotli"]
+	path = Dumper/ExternalDependencies/Compression/brotli
+	url = https://github.com/google/brotli
